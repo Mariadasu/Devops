@@ -1,0 +1,185 @@
+1. Create 2 instances ( 1. Master and 2. managed host) on AWS 
+    DO this step only on Master Node
+      user data script:
+           a. sudo yum update
+           b. sudo yum install ansible -y
+           c. sudo yum install python3-pip
+           d. sudo pip3 install botocore boto3
+           e. sudo yum install yum-utils
+
+
+2. connect to master node:   verify your isntallation
+         a.  ansible --version
+
+3. change the master node hostname:
+         a. sudo hostnamectl set-hostname control-node.example.com
+
+4. change the manged node hostname:
+        a. sudo hostnamectl set-hostname managed-node-01.example.com
+
+5. login to the master node:  edit the /etc/hosts file.   add the following entries
+       a. sudo nano /etc/hosts
+-------------add the follwoing lines  (Private IP address) -----------------
+       172.31.13.217   control-node.example.com    control-node
+       172.31.14.112   managed-node-01.example.com managed-node-01 
+------------------------------------------------------------------------
+
+6. Reconnect to the master node again (Check the prompt)
+
+7. mkdir ansible-demo && cd ansible-demo
+
+8. Create a inventory file
+     a. sudo nano "inventory.ini"
+------------- add the follwoing line ------
+[dev] 
+managed-node-01.example.com
+---------------------------------------
+
+9. Copy the "ansible-key" from local machine to control-node server in project file. (use powershell to copy "key" from localhost to Control node)
+      a.  scp -i ".\ansible-key.pem"  .\ansible-key.pem ec2-user@ec2-13-233-207-151.ap-south-1.compute.amazonaws.com:/home/ec2-user/ansible-demo
+
+10. Change the "ansible-key" permissions 
+      a. sudo chmod 400 ./ansible-key.pem
+
+11. Creaete a "ansible.cfg" file
+	a. sudo nano "ansible.cfg"
+----------------add the following lines ----------------
+[defaults]
+inventory = ./inventory.ini
+interpreter_python=/usr/bin/python3
+remote_user = ec2-user
+ask_pass = false
+private_key_file = ./ansible-key.pem
+host_key_checking = False
+roles_path = roles/
+log_path = ansible.log
+------------------------------------------------------
+
+12. check the config file using command
+      a.  ansible --version
+
+13. now try to ssh to the managed node using command:  (Note: you can use any IP. Public or Private)
+      a. ssh -i ./ansible-key.pem ec2-user@172.31.14.112  
+
+14. check the environemnt setup and whether you can ping to the managed node using commnad:
+     a. ansible dev -m ping
+######################################################################################
+
+TASK 1: Roll out the NextCloud automatically via Ansible
+
+Solution:
+---
+- name: Install Nextcloud
+  hosts: dev  # Use the group name defined in your inventory file
+  become: yes  # Run tasks with sudo privileges
+
+  tasks:
+    - name: Update package cache
+      yum:
+        name: '*'
+        state: latest
+      become: yes
+
+    - name: Install required packages
+      yum:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - httpd
+        - php
+        - php-gd
+        - php-curl
+        - php-intl
+        - php-mbstring
+        - php-json
+        - php-xml
+        - php-zip
+        
+    - name: Start and enable services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      loop:
+        - httpd
+        
+    - name: Secure MySQL installation (This is a basic setup, customize for production)
+      mysql_user:
+        name: root
+        password: admin123
+        host: localhost
+        login_user: root
+        login_password: your_root_password
+        state: present
+
+    - name: Create Nextcloud database and user
+      mysql_db:
+        name: nextcloud
+        state: present
+      become_user: mysql
+
+    - name: Create a MySQL user for Nextcloud
+      mysql_user:
+        name: nextcloud
+        password: admin123
+        host: localhost
+        login_user: root
+        login_password: admin123
+        priv: 'nextcloud.*:ALL'
+      become_user: mysql
+
+    - name: Download and extract Nextcloud
+      get_url:
+        url: https://download.nextcloud.com/server/releases/latest.tar.bz2
+        dest: /var/www/html/
+        owner: apache
+        group: apache
+
+    - name: Extract Nextcloud archive
+      shell: tar -xjf /var/www/html/latest.tar.bz2 -C /var/www/html/
+      args:
+        chdir: /var/www/html/
+      become: yes
+
+    - name: Set permissions on Nextcloud directory
+      file:
+        path: /var/www/html/nextcloud
+        owner: apache
+        group: apache
+        recurse: yes
+      become: yes
+
+    - name: Configure Apache for Nextcloud
+      template:
+        src: nextcloud.conf.j2  # Create this template file
+        dest: /etc/httpd/conf.d/nextcloud.conf
+      become: yes
+
+    - name: Start Apache web server
+      service:
+        name: httpd
+        state: started
+      become: yes
+
+    - name: Enable and start redis
+      service:
+        name: redis
+        enabled: yes
+        state: started
+
+    - name: Configure Nextcloud
+      shell: sudo -u apache php /var/www/html/nextcloud/occ maintenance:install --database "mysql" --database-name "nextcloud" --database-host "localhost" --database-user "nextcloud" --database-pass "your_nextcloud_db_password" --admin-user "admin" --admin-pass "your_admin_password"
+      args:
+        creates: /var/www/html/nextcloud/config/config.php
+      become: yes
+
+    - name: Configure SELinux (if needed)
+      selinux:
+        policy: targeted
+        state: disabled
+      become: yes
+
+--------------------------------------------------------------------------------------------------------------------------
+
+
+

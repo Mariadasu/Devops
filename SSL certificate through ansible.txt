@@ -1,0 +1,158 @@
+Question: in your role as Reliability engineer you might be expected to automate the management the certificates expiry notifications. proposed a solution/playbook using ansible/ terraform that will alert you periodically through a channel such as slack/ Microsoft teams.  The solution/ playbook is not expected to be fully functional. an explanation of the playbook/ roles and how they will be notified is acceptable. 
+
+Solution:
+
+Step 1: Prerequisites
+
+
+
+1. AWS account with appropriate permissions.
+2. Ansible and Terraform installed on your local machine.
+3. SSL certificates you want to monitor on your target servers.
+4. Slack or Microsoft Teams channels for receiving notifications.
+
+
+
+Step 2: Terraform Configuration
+
+Create a directory for your Terraform project and create a .tf file (e.g., main.tf) with the following content:
+
+# Terraform script to create server with ansible installation
+-----------------------------------------------------------------
+provider "aws" {
+  region = "us-east-1" # Change to your desired region
+}
+
+resource "aws_instance" "certificate_checker" {
+  ami           = "ami-0c55b159cbfafe1f0"  # Use an appropriate AMI
+  instance_type = "t2.micro"             # Use an appropriate instance type
+  key_name      = "your-key-name"        # Replace with your SSH key name
+
+  tags = {
+    Name = "Certificate Checker Instance"
+  }
+
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y ansible
+              EOF
+}
+-----------------------------------------------------------------
+Run terraform init and terraform apply to create the EC2 instance.
+
+Step 3: Ansible Playbook for Certificate Expiry Checks
+
+Create a directory for Ansible project and create a playbook file 
+
+Ansible script to check SSL certificate expiary date
+-----------------------------------------------------------------
+---
+- name: Certificate Expiry Check
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Get Certificate Expiry Date
+      shell: "openssl x509 -in /path/to/your/certificate.crt -noout -dates"
+      register: certificate_dates
+      changed_when: false
+
+    - name: Extract Certificate Expiry Date
+      set_fact:
+        expiry_date: "{{ certificate_dates.stdout | regex_search('notAfter=(.*)$', '\\1') }}"
+      when: certificate_dates.stdout is search('notAfter')
+
+    - name: Get Current Date
+      command: date '+%Y%m%d%H%M%S'
+      register: current_date
+
+    - name: Calculate Remaining Days
+      set_fact:
+        remaining_days: "{{ ((expiry_date | to_datetime('%b %d %H:%M:%S %Y %Z')) - (current_date.stdout | to_datetime('%Y%m%d%H%M%S'))).days }}"
+      when: expiry_date is defined
+
+    - name: Send Slack Notification
+      uri:
+        url: "https://hooks.slack.com/services/your_slack_webhook_url"
+        method: POST
+        body: "text=Certificate Expiry: {{ remaining_days }} days remaining for /path/to/your/certificate.crt"
+        status_code: 200
+      when: remaining_days | int <= 30  # Change this threshold as needed
+
+----------------------------------------------------------------
+Step 4: Schedule Ansible Playbook Execution
+
+Use a scheduling tool like cron to periodically execute the Ansible playbook. For example, to run the playbook every day at 3 AM, add the following entry to your crontab:
+
+0 3 * * * /usr/bin/ansible-playbook /path/to/your/certificate_expiry_check.yml
+
+Step 5: Slack or Microsoft Teams Integration
+
+Create a Slack or Microsoft Teams webhook for notifications and replace "https://hooks.slack.com/services/your_slack_webhook_url" in the Ansible playbook with the actual webhook URL.
+
+Step 6: Monitor and Maintain
+
+Monitor the execution of the playbook and ensure that it sends notifications as expected.
+Maintain the playbook and update it as needed.
+
+#####################################################################################################
+
+General solution only Theory:   without implementation
+
+Solution Overview:
+The goal of this solution is to periodically check the expiry of SSL certificates on your servers and send notifications to Slack or Microsoft Teams when certificates are close to expiration. The solution includes the following components:
+
+-----------------------------------------------------------
+STEP 1:  Terraform Configuration:
+
+Terraform is used to provision infrastructure, such as EC2 instances, where Ansible will run. It sets up the environment for certificate checks.
+
+----------------------------------------------------
+STEP 2: Ansible Playbook:
+
+An Ansible playbook runs on the provisioned EC2 instances to perform certificate checks and send notifications.
+
+Here is a conceptual explanation of the Ansible playbook roles:
+
+Role 1: Certificate Check Role:
+
+This role will:
+Use OpenSSL or other certificate management tools to check the expiration date of SSL certificates on target servers.
+Calculate the number of days remaining until certificate expiry.
+Generate a report with details about the certificates and their expiry dates.
+Save the report on the Ansible host.
+
+Role 2: Notification Role:
+
+This role will:
+Read the certificate expiry report generated by the Certificate Check Role.
+Determine which certificates are close to expiration (based on a specified threshold, e.g., 30 days).
+Use a notification module (e.g., Slack or Microsoft Teams) to send alerts to the respective channels.
+Include information about certificates that are nearing expiration.
+
+--------------------------------------------------
+
+STEP 3: Slack/Microsoft Teams Integration:
+
+The playbook will be configured with Slack or Microsoft Teams integration tokens or webhooks to send notifications to the desired channels.
+You need to set up Slack or Microsoft Teams with the necessary permissions and configurations to receive notifications.
+
+-------------------------------------------------------
+
+Implementation Steps:
+
+1. Use Terraform to provision EC2 instances and set up the necessary networking and security group configurations.
+
+2. Create an Ansible playbook that includes the two roles: Certificate Check Role and Notification Role. These roles should be executed sequentially.
+
+3. Configure the playbook to run periodically using scheduling tools (e.g., cron) on the provisioned EC2 instances.
+
+4. Ensure the Ansible playbook has access to the SSL certificates on target servers.
+
+5. Set up secure methods for passing sensitive information, such as API tokens for Slack or Microsoft Teams, to the playbook.
+
+6. Test the playbook to ensure it correctly identifies expiring certificates and sends notifications to Slack or Microsoft Teams.
+
+7. Monitor the playbook's execution and make necessary adjustments based on the notifications received.
+
+8. Document the entire solution, including Terraform configurations and Ansible playbook, for future reference and maintenance.

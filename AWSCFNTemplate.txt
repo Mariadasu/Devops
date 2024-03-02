@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Launch two EC2 instances with different User Data
+
+Resources:
+  EC2Instance1:
+    Type: AWS::EC2::Instance
+    Properties:  
+      InstanceType: t2.micro
+      KeyName: ansible-key
+      SecurityGroups:
+        - Ref: MySecurityGroup
+      ImageId: ami-03a6eaae9938c858c         
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # User data for instance 1
+          sudo yum install ansible -y
+          sudo yum install python3-pip
+          sudo pip3 install botocore boto3
+          sudo yum install yum-utils
+          sudo hostnamectl set-hostname control-node.example.com
+          echo "Hello from instance 1" > /tmp/instance1.txt
+
+  EC2Instance2:
+    Type: AWS::EC2::Instance
+    Properties:  
+      InstanceType: t2.micro
+      KeyName: ansible-key
+      SecurityGroups:
+        - Ref: MySecurityGroup 
+      ImageId: ami-03a6eaae9938c858c         
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # User data for instance 2
+          sudo yum update -y
+          sudo yum install firewalld -y
+          sudo systemctl start firewalld
+          sudo systemctl enable firewalld
+          sudo systemctl status firewalld
+          echo "Hello from instance 2" > /tmp/instance2.txt
+
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH and Docker access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0 
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+
+Outputs:
+  Instance1Id:
+    Description: Instance ID of EC2Instance1
+    Value: !Ref EC2Instance1
+  PublicIP:
+    Description: Public IP address of the newly created EC2 instance
+    Value: !GetAtt EC2Instance1.PublicIp
+    
+  Instance2Id:
+    Description: Instance ID of EC2Instance2
+    Value: !Ref EC2Instance2
+  PublicIP:
+    Description: Public IP address of the newly created EC2 instance
+    Value: !GetAtt EC2Instance2.PublicIp

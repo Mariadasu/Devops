@@ -1,0 +1,144 @@
+
+
+
+
+
+1. change the Controller and managed node hostnames:
+         a. sudo hostnamectl set-hostname control-node.example.com
+
+        b. sudo hostnamectl set-hostname managed-node-01.example.com
+
+2. on controller node:  
+ /etc/hosts    
+       
+
+       172.31.84.167   control-node.example.com    control-node
+       172.31.92.149   managed-node-01.example.com managed-node-01 
+------------------------------------------------------------------------
+
+3. Reboot the controller node
+
+4. mkdir ansible-demo && cd ansible-demo
+
+5.  inventory file
+     a. sudo nano "inventory.ini"
+-------------------
+[dev] 
+managed-node-01.example.com
+---------------------------------------
+
+6. ssh -i "ansible-key.pem" ec2-user@ec2-3-82-130-125.compute-1.amazonaws.com
+
+
+      scp -i ".\ansible-key.pem"  .\ansible-key.pem ec2-user@ec2-3-82-130-125.compute-1.amazonaws.com:/home/ec2-user/ansible-demo
+
+7. permissions 
+       sudo chmod 400 ./ansible-key.pem
+
+8.  "ansible.cfg" 
+	 "ansible.cfg"
+----------------add the following lines ----------------
+[defaults]
+inventory = ./inventory.ini
+interpreter_python=/usr/bin/python3
+remote_user = ec2-user
+ask_pass = false
+private_key_file = ./ansible-key.pem
+host_key_checking = False
+roles_path = roles/
+log_path = ansible.log
+------------------------------------------------------
+
+9.
+      a.  ansible --version
+
+10. 
+      a. ssh -i ./ansible-key.pem ec2-user@172.31.14.112  
+
+11. 
+     a. ansible dev -m ping
+######################################################################################
+
+TASK 1: Roll out the NextCloud automatically via Ansible
+
+12. vim nextcloud.yml 
+
+Solution: using docker images of NextCloud and install it via ansible-playbook
+
+---
+- name: Deploy Nextcloud on Docker
+  hosts: all
+  become: yes
+  vars:
+    db_volume: mariadb
+    nextcloud: nextcloud
+  tasks:
+    - name: Pull Nextcloud Docker image
+      docker_image:
+        name: nextcloud:latest
+        source: pull
+      become: yes
+
+    - name: Deploy MariaDB server
+      docker_container:
+        image: mariadb
+        name: mariadb
+        command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+          --innodb-file-per-table=1 --skip-innodb-read-only-compressed
+        volumes:
+          - "{{db_volume}}:/var/lib/mysql"
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_PASSWORD: password
+          MYSQL_DATABASE: db
+          MYSQL_USER: mysqluser
+
+    - name: Run Nextcloud container
+      docker_container:
+        name: nextcloud
+        image: nextcloud:latest
+        ports:
+          - 8080:80
+        links:
+          - "{{db_volume}}:/var/lib/mysql"
+        volumes:
+          - "{{nextcloud}}:/var/www/html/"
+        env:
+          MYSQL_HOST: mariadb
+          MYSQL_DATABASE: db
+          MYSQL_USER: mysql
+          MYSQL_PASSWORD: password
+      become: yes
+
+    - name: Configure firewall to allow incoming traffic on port 8080
+      firewalld:
+        port: 8080/tcp
+        state: enabled
+        permanent: yes
+      become: yes
+    - name: Ensure Docker containers are started on boot
+      systemd:
+        name: docker
+        enabled: yes
+      become: yes
+--------------------------------------------------------------------------------------------------------------------------
+13.  ansible-playbook nextcloud.yml
+
+14.  git config --global user.name "mariadasu"
+   git config --global user.email "dasrt81@gmail.com"
+   git init
+   ls -all
+   git add README.md
+   git branch -M main
+   git remote add origin https://github.com/Mariadasu/Ansible_1.git
+   git push -u origin main
+   git add .
+   git commit -m "firstcommit"
+   git remote add origin https://github.com/Mariadasu/Ansible_1.git
+   git push -u origin main  
+       
+
+==============================================
+Ref website: https://markontech.com/devops/deploy-nextcloud-on-docker-using-ansible/
+
+

@@ -1,0 +1,27 @@
+Controller Node - userdata
+
+sudo yum update
+sudo yum install ansible -y
+sudo yum install python3-pip
+sudo pip3 install botocore boto3
+sudo yum install yum-utils
+sudo hostnamectl set-hostname control-node.example.com
+
+*
+*
+
+2. /etc/hosts
+
+	172.31.13.217   control-node.example.com        control-node
+	172.31.14.112   managed-node-01.example.com     managed-node-
+ ec2-user@ec2-3-83-135-150.compute-1.amazonaws.com
+
+
+fatal: [managed-node-01.example.com]: FAILED! => {"changed": false, "msg": "Error connecting: Error while fetching server API version: ('Connection aborted.', FileNotFoundError(2, 'No such file or directory'))"}
+
+
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/Mariadasu/Ansible.git
+git push -u origin main
